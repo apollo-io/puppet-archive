@@ -11,8 +11,9 @@ module Puppet::Parser::Functions
     require 'json'
     require 'puppet_x/bodeco/util.rb'
 
-    uri = URI(args[0])
-    response = PuppetX::Bodeco::Util.content(uri)
+#    uri = URI(args[0])
+#    response = PuppetX::Bodeco::Util.content(uri)
+    response = PuppetX::Bodeco::Util.content(args[0])
     content = JSON.parse(response)
 
     sha1 = content['checksums'] && content['checksums']['sha1']

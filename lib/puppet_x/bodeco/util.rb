@@ -39,26 +39,52 @@ module PuppetX
         request.basic_auth(@username, @password) if @username && @password
         request
       end
-
+      
       def follow_redirect(uri, option = { :limit => FOLLOW_LIMIT }, &block)
-        Net::HTTP.start(uri.host, uri.port, :use_ssl => (uri.scheme == 'https')) do |http|
-          http.request(generate_request(uri)) do |response|
-            case response
-            when Net::HTTPSuccess
-              yield response
-            when Net::HTTPRedirection
-              limit = option[:limit] - 1
-              raise Puppet::Error, "Redirect limit exceeded, last url: #{uri}" if limit < 0
-              location = safe_escape(response['location'])
-              new_uri = URI(location)
-              new_uri = URI(uri.to_s + location) if new_uri.relative?
-              follow_redirect(new_uri, :limit => limit, &block)
-            else
-              raise Puppet::Error, "HTTP Error Code #{response.code}\nURL: #{uri}\nContent:\n#{response.body}"
-            end
+        # Net::HTTP.start does not support setting https in Ruby 1.8.7
+        conn = Net::HTTP.new(uri.host, uri.port)
+        conn.use_ssl = (uri.scheme == 'https')
+
+        # Am sure this can be cleaner from a ruby perspective, but had problems
+        # with yield returning Nil with nested code
+        http = conn.start
+        http.request(generate_request(uri)) do |response|
+          case response
+          when Net::HTTPSuccess
+            yield response
+          when Net::HTTPRedirection
+            limit = option[:limit] - 1
+            raise Puppet::Error, "Redirect limit exceeded, last url: #{uri}" if limit < 0
+            location = safe_escape(response['location'])
+            new_uri = URI(location)
+            new_uri = URI(uri.to_s + location) if new_uri.relative?
+            follow_redirect(new_uri, :limit => limit, &block)
+          else
+            raise Puppet::Error, "HTTP Error Code #{response.code}\nURL: #{uri}\nContent:\n#{response.body}"
           end
         end
       end
+
+#
+#      def follow_redirect(uri, option = { :limit => FOLLOW_LIMIT }, &block)
+#        Net::HTTP.start(uri.host, uri.port, :use_ssl => (uri.scheme == 'https')) do |http|
+#          http.request(generate_request(uri)) do |response|
+#            case response
+#            when Net::HTTPSuccess
+#              yield response
+#            when Net::HTTPRedirection
+#              limit = option[:limit] - 1
+#              raise Puppet::Error, "Redirect limit exceeded, last url: #{uri}" if limit < 0
+#              location = safe_escape(response['location'])
+#              new_uri = URI(location)
+#              new_uri = URI(uri.to_s + location) if new_uri.relative?
+#              follow_redirect(new_uri, :limit => limit, &block)
+#            else
+#              raise Puppet::Error, "HTTP Error Code #{response.code}\nURL: #{uri}\nContent:\n#{response.body}"
+#            end
+#          end
+#        end
+#      end
 
       def download(uri, file_path, option = { :limit => FOLLOW_LIMIT })
         follow_redirect(uri, option) do |response|
